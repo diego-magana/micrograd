@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "micrograd"
+version = "0.1.0"
+description = "A scalar-valued autograd engine with a minimal neural network library."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "torch",
+    "matplotlib",
+    "scikit-learn",
+    "pytest",
+    "jupyter",
+    "graphviz",
+]
+
+[tool.setuptools.packages.find]
+include = ["micrograd*"]
