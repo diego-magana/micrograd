@@ -1,6 +1,8 @@
 # micrograd
 
-Scalar-valued autograd engine implemented from first principles, with a multilayer perceptron trained on binary classification.
+Scalar-valued autograd engine implemented from first principles, extending Karpathy's
+[micrograd](https://github.com/karpathy/micrograd) with softmax + NLL loss, gradient
+verification against PyTorch to 1e-5, and an original make_moons classification demo.
 
 ## What it does
 
