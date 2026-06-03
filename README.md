@@ -1,5 +1,7 @@
 # micrograd
 
+![CI](https://github.com/diego-magana/micrograd/actions/workflows/ci.yml/badge.svg)
+
 Scalar-valued autograd engine built from scratch, with an MLP trained on binary classification.
 
 ## What it does
