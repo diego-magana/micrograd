@@ -2,9 +2,7 @@
 
 ![CI](https://github.com/diego-magana/micrograd/actions/workflows/ci.yml/badge.svg)
 
-A scalar-valued autograd engine — reverse-mode automatic differentiation small
-enough to read end to end — with a minimal neural-network library on top and a
-from-scratch multi-class classifier trained on it.
+A scalar autograd engine, small enough to read end to end. It builds a computation graph as you do arithmetic, then backpropagates through it — the same mechanism as PyTorch's loss.backward(), on scalars instead of tensors.
 
 This is the first repo in a series — **micrograd → [makemore](https://github.com/diego-magana/makemore) → [gpt](https://github.com/diego-magana/gpt)** —
 that builds up from a single differentiable scalar to a transformer with
