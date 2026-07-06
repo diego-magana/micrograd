@@ -1,7 +1,6 @@
 numpy
-torch
 matplotlib
-scikit-learn
+torch
 pytest
 jupyter
 graphviz

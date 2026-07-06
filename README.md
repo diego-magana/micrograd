@@ -2,49 +2,107 @@
 
 ![CI](https://github.com/diego-magana/micrograd/actions/workflows/ci.yml/badge.svg)
 
-Scalar-valued autograd engine built from scratch, with an MLP trained on binary classification.
+A scalar-valued autograd engine built from scratch, with a small neural-network
+library on top and a from-scratch multi-class classifier trained on it.
+
+This is the first repo in a series — **micrograd → [makemore](https://github.com/diego-magana/makemore) → [gpt](https://github.com/diego-magana/gpt)** —
+that builds up from a single differentiable scalar to a transformer with
+interpretability tooling. micrograd is the foundation: the autograd mechanism
+everything else assumes, implemented in a form small enough to read end to end.
 
 ## What it does
 
-Builds a dynamic computation graph by overloading Python operators on a `Value` class. Backpropagation walks the graph in reverse topological order and applies the chain rule at each node — the same algorithm PyTorch's `loss.backward()` runs, just on scalars instead of tensors.
+A `Value` wraps one scalar and overloads Python's operators. Writing `a * b + c`
+builds a computation graph as a side effect; `loss.backward()` walks that graph
+in reverse topological order and applies the chain rule at each node. It's the
+same algorithm PyTorch's `loss.backward()` runs — reverse-mode automatic
+differentiation — restricted to scalars so that every step is visible.
 
-## Approach
+The engine and the nn library are **pure standard library** (`math`, `random`) —
+no NumPy, no framework. NumPy and PyTorch appear only in the demo and the tests.
 
-The `Value` class tracks each scalar's data, gradient, children, and a backward closure that encodes the local derivative rule. Three primitive operations — addition, multiplication, power — are sufficient: subtraction, division, and negation derive from these with no additional backward rules. The backward pass requires topological ordering because a node must receive gradients from all downstream consumers before propagating further back.
+## How it works
 
-Softmax and negative log-likelihood loss are implemented as compositions of the primitive operations — the engine recovers the analytical gradient `dL/dlogit_i = p_i - 1` (correct class) and `p_i` (others) automatically, without special-casing. I verified gradient correctness against PyTorch to 1e-5 across all operators, including the softmax+NLL composition — which runs every primitive through the shared denominator and stress-tests gradient accumulation.
+Each `Value` carries its data, its gradient, the parents it was built from, and
+a backward closure encoding the local derivative rule. Three primitives —
+addition, multiplication, and power — are the only operations that register
+gradient rules; subtraction, division, negation, and the reflected operators all
+compose from those three and inherit correct gradients for free. Add a few
+elementary functions (`tanh`, `relu`, `sigmoid`, `exp`, `log`) and that's the
+whole surface needed to express an MLP and a softmax classifier.
 
-Built as an extension of Karpathy's [micrograd](https://github.com/karpathy/micrograd), with softmax + NLL loss, gradient verification against PyTorch, and an original make_moons classification demo.
+Two details carry more weight than they look:
 
-## Results
+- **Gradients accumulate with `+=`, not `=`.** A node reused across paths (`y = x*x`
+  reuses `x`) must sum the contributions from every downstream path — the
+  multivariate chain rule. Leaf gradients start at `0.0` so that accumulation is
+  always safe.
+- **`backward()` needs topological order.** A node's closure distributes its
+  gradient to its parents, so it can only fire once it has received the full
+  gradient from all of its own consumers. Building children-before-parents and
+  walking that order in reverse guarantees it — the same dependency resolution a
+  compiler uses to schedule an expression.
 
-`MLP(2, [16, 16, 1])` trained on `make_moons(n=100, noise=0.1)` for 100 epochs, full-batch SGD, learning rate 0.01, binary cross-entropy loss on a sigmoid-transformed output.
+Softmax + negative-log-likelihood is built straight from the primitives; the
+engine rediscovers the clean closed-form gradient (`p_i − 1` for the true class,
+`p_i` otherwise) from the chain rule alone, with no special-cased layer. I verify
+every gradient against PyTorch to 1e-5 — the primitives, `relu`/`sigmoid`, and the
+full softmax+NLL composition (which runs every logit through a shared denominator
+and stress-tests accumulation).
 
-| metric | value |
-|---|---|
-| Final training loss | 31.8368 |
-| Training accuracy | 100% (100/100) |
-| Parameters | 337 |
+## The demo: three spirals
+
+`notebooks/spirals_demo.ipynb` trains a classifier on three interleaved spirals —
+a 2D, three-class problem I generate directly (there's no `make_spirals` in
+scikit-learn), chosen because a spiral forces a curved boundary that a linear
+model provably cannot draw. The notebook's arc is deliberate: prove the task is
+nonlinear, then solve it, then check it generalizes.
+
+| Model | Params | Test accuracy |
+|---|---|---|
+| Linear softmax (`MLP(2, [3])`) | 9 | ~0.27 — chance for 3 classes |
+| `MLP(2, [16, 16, 3])`, tanh hidden + softmax | 371 | **0.87** (train 0.99) |
+
+The linear baseline sits at chance because no linear boundary wraps a spiral; the
+MLP wraps all three arms and generalizes to a held-out split. The output layer is
+deliberately **linear** — a classification head has to emit unbounded logits so
+softmax can drive probability toward 1. Squashing the head (e.g. a tanh output)
+caps confidence and floors the loss, which is a real failure mode, not a
+stylistic choice; the `nonlin=False` head is the fix.
 
 ![Decision boundary](assets/decision_boundary.png)
-
-The engine learns a curved decision boundary that correctly separates the two moons — a task that linear classifiers cannot solve. The loss plateaus around ~31 rather than approaching zero because the tanh-activated output saturates at ±1, capping sigmoid confidence at ~0.73 per sample; the network is fully discriminating, just not arbitrarily confident.
 
 ## Run it
 
 ```bash
-pip install -r requirements.txt
-pip install -e .                              # makes the micrograd package importable
-pytest tests/                                 # verify gradient correctness against PyTorch
-jupyter notebook notebooks/moons_demo.ipynb   # full training demonstration
+pip install -e .                              # the package itself needs nothing else
+pip install -r requirements.txt               # deps for the tests + demo
+pytest                                        # verify gradients against PyTorch
+jupyter notebook notebooks/spirals_demo.ipynb # the full training demo
 ```
 
 ## Notes
 
-**Why `+=` not `=` in the backward closures.** A single `Value` node can feed multiple downstream consumers — for example, `y = x * x` reuses `x`, and the gradient of `y` w.r.t. `x` is `2x` from summing two `x`-paths. Using `=` instead of `+=` would silently drop the contribution from the second path through any reused node, producing wrong gradients with no error signal. Leaf gradients are initialized to `0.0` precisely so unconditional `+=` is safe.
+**The whole engine is six gradient rules.** `+`, `*`, `**`, `tanh`, `relu`,
+`sigmoid`, `exp`, `log` register backward closures; everything else in the public
+interface composes from them. The surface is rich, the bookkeeping is tiny — that
+concentration is the point of the design.
 
-**Why topological sort is necessary, not just convenient.** `backward()` can't walk the graph in arbitrary order. Each node's `_backward` distributes `out.grad` to its operands — for the distribution to be correct, `out.grad` must already contain *all* contributions from downstream consumers. Without topological ordering, a node could propagate a partial gradient before its full upstream contribution is accumulated, producing wrong gradients silently. This is the same dependency-resolution problem a compiler solves to schedule expression evaluation.
+**`tanh` and `sigmoid` are numerically stable.** `tanh` uses `math.tanh` rather
+than the algebraic `(e^{2x}−1)/(e^{2x}+1)` form, which overflows for large inputs;
+`sigmoid` branches on the sign so large-magnitude inputs don't overflow `exp`.
+Small things, but an engine whose thesis is correctness shouldn't crash on a
+large activation.
 
-**The minimal primitive set.** `__add__`, `__mul__`, `__pow__`, plus the elementary functions `tanh`, `exp`, `log`, are enough to express softmax, NLL, BCE, and an arbitrary MLP. Derived operators (`__sub__`, `__truediv__`, `__neg__`, plus the `__r*__` reflections) compose from the primitives and inherit gradient correctness without any new backward rules. The public surface is rich; the gradient bookkeeping lives in only six places.
+**It's built for understanding, not scale.** One `Value` per number and a Python
+loop per forward pass make this O(samples × params) with no vectorization — fine
+for a hundred 2D points, hopeless for a real dataset. That's the deliberate
+tradeoff: you can read every gradient. Scale is what the next repos add.
 
-**Why `.double()` matters in the PyTorch reference tests.** PyTorch defaults to float32, which floors gradient comparison at ~1e-7. Casting reference tensors to float64 lets the tests assert agreement to 1e-5 without false negatives from precision mismatch with Python's native float arithmetic.
+## Attribution
+
+The engine and MLP design follow Andrej Karpathy's
+[micrograd](https://github.com/karpathy/micrograd). What I added: `relu`/`sigmoid`
+with stability fixes, gradient verification against PyTorch (including softmax+NLL),
+the original three-spiral dataset and multi-class demo with a held-out split, and
+production packaging (tests, CI, docs).

@@ -8,19 +8,12 @@ version = "0.1.0"
 description = "A scalar-valued autograd engine with a minimal neural network library."
 readme = "README.md"
 requires-python = ">=3.9"
-dependencies = [
-    "numpy",
-]
+license = { text = "MIT" }
+# The engine and nn library are pure-stdlib (math, random) — no runtime deps.
+dependencies = []
 
 [project.optional-dependencies]
-dev = [
-    "torch",
-    "matplotlib",
-    "scikit-learn",
-    "pytest",
-    "jupyter",
-    "graphviz",
-]
+dev = ["torch", "numpy", "matplotlib", "pytest", "jupyter", "nbconvert", "graphviz"]
 
 [tool.setuptools.packages.find]
 include = ["micrograd*"]
