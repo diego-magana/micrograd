@@ -2,21 +2,21 @@
 
 ![CI](https://github.com/diego-magana/micrograd/actions/workflows/ci.yml/badge.svg)
 
-A scalar-valued autograd engine built from scratch, with a small neural-network
-library on top and a from-scratch multi-class classifier trained on it.
+A scalar-valued autograd engine — reverse-mode automatic differentiation small
+enough to read end to end — with a minimal neural-network library on top and a
+from-scratch multi-class classifier trained on it.
 
 This is the first repo in a series — **micrograd → [makemore](https://github.com/diego-magana/makemore) → [gpt](https://github.com/diego-magana/gpt)** —
 that builds up from a single differentiable scalar to a transformer with
-interpretability tooling. micrograd is the foundation: the autograd mechanism
-everything else assumes, implemented in a form small enough to read end to end.
+interpretability tooling. micrograd is the foundation — the autograd mechanism everything else assumes.
 
 ## What it does
 
 A `Value` wraps one scalar and overloads Python's operators. Writing `a * b + c`
-builds a computation graph as a side effect; `loss.backward()` walks that graph
-in reverse topological order and applies the chain rule at each node. It's the
-same algorithm PyTorch's `loss.backward()` runs — reverse-mode automatic
-differentiation — restricted to scalars so that every step is visible.
+constructs the graph as a byproduct of Python's operator dispatch; `loss.backward()`
+walks it in reverse topological order and applies the chain rule at each node. It's
+the same algorithm PyTorch's `loss.backward()` runs, restricted to scalars so that
+every step is visible.
 
 The engine and the nn library are **pure standard library** (`math`, `random`) —
 no NumPy, no framework. NumPy and PyTorch appear only in the demo and the tests.
@@ -60,11 +60,13 @@ nonlinear, then solve it, then check it generalizes.
 
 | Model | Params | Test accuracy |
 |---|---|---|
-| Linear softmax (`MLP(2, [3])`) | 9 | ~0.27 — chance for 3 classes |
+| Linear softmax (`MLP(2, [3])`) | 9 | **0.27** — no better than the ~0.33 guess rate |
 | `MLP(2, [16, 16, 3])`, tanh hidden + softmax | 371 | **0.87** (train 0.99) |
 
-The linear baseline sits at chance because no linear boundary wraps a spiral; the
-MLP wraps all three arms and generalizes to a held-out split. The output layer is
+The linear baseline lands around the random-guess rate for three classes (~0.33)
+because no linear boundary wraps a spiral — on the held-out split it collapses
+toward over-predicting one class rather than separating the arms. The MLP wraps
+all three arms and generalizes to the held-out points. The output layer is
 deliberately **linear** — a classification head has to emit unbounded logits so
 softmax can drive probability toward 1. Squashing the head (e.g. a tanh output)
 caps confidence and floors the loss, which is a real failure mode, not a
