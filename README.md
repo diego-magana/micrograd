@@ -26,8 +26,9 @@ a backward closure encoding the local derivative rule. Three primitives —
 addition, multiplication, and power — are the only operations that register
 gradient rules; subtraction, division, negation, and the reflected operators all
 compose from those three and inherit correct gradients for free. Add a few
-elementary functions (`tanh`, `relu`, `sigmoid`, `exp`, `log`) and that's the
-whole surface needed to express an MLP and a softmax classifier.
+elementary functions (`tanh`, `exp`, `log`; `relu` and `sigmoid` round out the
+set) and that's the whole surface needed to express an MLP and a softmax
+classifier.
 
 Two details carry more weight than they look:
 
@@ -83,10 +84,12 @@ jupyter notebook notebooks/spirals_demo.ipynb # the full training demo
 
 ## Notes
 
-**The whole engine is six gradient rules.** `+`, `*`, `**`, `tanh`, `relu`,
-`sigmoid`, `exp`, `log` register backward closures; everything else in the public
-interface composes from them. The surface is rich, the bookkeeping is tiny — that
-concentration is the point of the design.
+**The whole engine is six gradient rules — plus two.** `+`, `*`, `**`, `tanh`,
+`exp`, `log` are the closures everything else composes from. `relu` and `sigmoid`
+register two more: `sigmoid` only for numerical stability (the six can already
+express it), `relu` because a comparison can't be built from arithmetic. The
+surface is rich, the bookkeeping is tiny — that concentration is the point of
+the design.
 
 **`tanh` and `sigmoid` are numerically stable.** `tanh` uses `math.tanh` rather
 than the algebraic `(e^{2x}−1)/(e^{2x}+1)` form, which overflows for large inputs;
