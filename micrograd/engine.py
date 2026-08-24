@@ -12,6 +12,7 @@ one backward closure per operation — built for understanding, not for speed.
 """
 
 import math
+import numbers
 
 
 class Value:
@@ -38,7 +39,7 @@ class Value:
     def __repr__(self):
         return f"Value(data={self.data}, grad={self.grad})"
 
-    # -- Primitives: the only three nodes that register backward rules. --------
+    # -- Arithmetic operators: the only three *operators* with backward rules. -
 
     def __add__(self, other):
         """a + b. Addition distributes gradient unchanged: d/da = d/db = 1."""
@@ -72,8 +73,16 @@ class Value:
         primitive gives reciprocals (n=-1) and roots (n=0.5), so division
         falls out of it for free.
         """
-        assert isinstance(other, (int, float)), \
-            "only int/float exponents supported (no gradient flows to the exponent)"
+        # A raise, not an assert: `python -O` strips asserts, and without this
+        # guard `self.data ** other` on e.g. a numpy array silently builds a
+        # Value whose .data is an array. `numbers.Real` also catches numpy
+        # scalars, which `isinstance(other, (int, float))` lets through.
+        if not isinstance(other, numbers.Real) or isinstance(other, bool):
+            raise TypeError(
+                f"exponent must be a real scalar, got {type(other).__name__}; "
+                "no gradient flows to the exponent"
+            )
+        other = float(other)
         out = Value(self.data ** other, (self,), f'**{other}')
 
         def _backward():
@@ -81,7 +90,7 @@ class Value:
         out._backward = _backward
         return out
 
-    # -- Elementary functions. -------------------------------------------------
+    # -- Elementary functions: five more backward rules. -----------------------
 
     def tanh(self):
         """tanh nonlinearity. Local grad reuses the forward value: 1 - t**2.
