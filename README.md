@@ -68,15 +68,7 @@ nonlinear, then solve it, then check it generalizes.
 The linear baseline converges to a held-out NLL of 1.14 against the 1.10 of
 guessing uniformly — it learns a little on train (NLL 1.00) and none of it
 transfers. It is not undertrained: the loss is unchanged from step 80 to step
-3,000 and the gradient norm reaches 1e-16. That finite fixed point is the
-evidence, since softmax regression on separable data has no finite optimum.
-Its predictions distribute [14, 8, 8] against true test counts of 7/11/12 — it
-collapses onto one class rather than separating the arms. The MLP wraps
-all three arms and generalizes to the held-out points. The output layer is
-deliberately **linear** — a classification head has to emit unbounded logits so
-softmax can drive probability toward 1. Squashing the head (e.g. a tanh output)
-caps confidence and floors the loss, which is a real failure mode, not a
-stylistic choice; the `nonlin=False` head is the fix.
+3,000 and the gradient norm reaches 1e-16. 
 
 [![Decision boundary](assets/decision_boundary.png)](https://github.com/diego-magana/micrograd/blob/main/notebooks/spirals_demo.ipynb)
 
