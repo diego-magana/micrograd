@@ -8,6 +8,9 @@ This is the first repo in a series — **micrograd → [makemore](https://github
 that builds up from a single differentiable scalar to a transformer with
 interpretability tooling. micrograd is the foundation — the autograd mechanism everything else assumes.
 
+If you want the short version, read [`notebooks/spirals_demo.ipynb`](https://github.com/diego-magana/micrograd/blob/main/notebooks/spirals_demo.ipynb) — it's the
+whole thing end to end with outputs, from the engine to a trained classifier.
+
 ## What it does
 
 A `Value` wraps one scalar and overloads Python's operators. Writing `a * b + c`
@@ -22,13 +25,13 @@ no NumPy, no framework. NumPy and PyTorch appear only in the demo and the tests.
 ## How it works
 
 Each `Value` carries its data, its gradient, the parents it was built from, and
-a backward closure encoding the local derivative rule. Three primitives —
-addition, multiplication, and power — are the only operations that register
-gradient rules; subtraction, division, negation, and the reflected operators all
-compose from those three and inherit correct gradients for free. Add a few
-elementary functions (`tanh`, `exp`, `log`; `relu` and `sigmoid` round out the
-set) and that's the whole surface needed to express an MLP and a softmax
-classifier.
+a backward closure encoding the local derivative rule. Three arithmetic
+operators — addition, multiplication, and power — are the only *operators* that
+register gradient rules; subtraction, division, negation, and the reflected
+variants all compose from those three and inherit correct gradients for free.
+Five elementary functions register their own (`tanh`, `exp`, `log`, plus `relu`
+and `sigmoid`), and that's the whole surface needed to express an MLP and a
+softmax classifier.
 
 Two details carry more weight than they look:
 
@@ -51,7 +54,7 @@ and stress-tests accumulation).
 
 ## The demo: three spirals
 
-`notebooks/spirals_demo.ipynb` trains a classifier on three interleaved spirals —
+[`notebooks/spirals_demo.ipynb`](https://github.com/diego-magana/micrograd/blob/main/notebooks/spirals_demo.ipynb) trains a classifier on three interleaved spirals —
 a 2D, three-class problem I generate directly (there's no `make_spirals` in
 scikit-learn), chosen because a spiral forces a curved boundary that a linear
 model provably cannot draw. The notebook's arc is deliberate: prove the task is
@@ -59,19 +62,23 @@ nonlinear, then solve it, then check it generalizes.
 
 | Model | Params | Test accuracy |
 |---|---|---|
-| Linear softmax (`MLP(2, [3])`) | 9 | **0.27** — no better than the ~0.33 guess rate |
+| Linear softmax (`MLP(2, [3])`) | 9 | **0.27** — test NLL **1.14** vs $\ln 3 = 1.10$ |
 | `MLP(2, [16, 16, 3])`, tanh hidden + softmax | 371 | **0.87** (train 0.99) |
 
-The linear baseline lands around the random-guess rate for three classes (~0.33)
-because no linear boundary wraps a spiral — on the held-out split it collapses
-toward over-predicting one class rather than separating the arms. The MLP wraps
+The linear baseline converges to a held-out NLL of 1.14 against the 1.10 of
+guessing uniformly — it learns a little on train (NLL 1.00) and none of it
+transfers. It is not undertrained: the loss is unchanged from step 80 to step
+3,000 and the gradient norm reaches 1e-16. That finite fixed point is the
+evidence, since softmax regression on separable data has no finite optimum.
+Its predictions distribute [14, 8, 8] against true test counts of 7/11/12 — it
+collapses onto one class rather than separating the arms. The MLP wraps
 all three arms and generalizes to the held-out points. The output layer is
 deliberately **linear** — a classification head has to emit unbounded logits so
 softmax can drive probability toward 1. Squashing the head (e.g. a tanh output)
 caps confidence and floors the loss, which is a real failure mode, not a
 stylistic choice; the `nonlin=False` head is the fix.
 
-![Decision boundary](assets/decision_boundary.png)
+[![Decision boundary](assets/decision_boundary.png)](https://github.com/diego-magana/micrograd/blob/main/notebooks/spirals_demo.ipynb)
 
 ## Run it
 
@@ -85,9 +92,11 @@ jupyter notebook notebooks/spirals_demo.ipynb # the full training demo
 ## Notes
 
 **The whole engine is six gradient rules — plus two.** `+`, `*`, `**`, `tanh`,
-`exp`, `log` are the closures everything else composes from. `relu` and `sigmoid`
-register two more: `sigmoid` only for numerical stability (the six can already
-express it), `relu` because a comparison can't be built from arithmetic. The
+`exp`, `log` are the six everything else composes from. `sigmoid` is a
+convenience the six can already express as `1/(1+exp(-x))`, implemented directly
+so large negative inputs don't overflow `exp`. `relu` is not — it needs a
+comparison rather than an arithmetic operation, so it genuinely extends what the
+engine can express. Eight closures in `engine.py`, six of them load-bearing. The
 surface is rich, the bookkeeping is tiny — that concentration is the point of
 the design.
 
